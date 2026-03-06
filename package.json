@@ -1,0 +1,13 @@
+{
+	"name": "@oari/router-interface-sdk",
+	"version": "0.0.0",
+	"scripts": {
+		"generate-proto": "npx tsrpc proto -i blockchain/protocol -o blockchain/protocol.generated.ts --verbose"
+	},
+	"exports": {
+		"./blockchain": "./dist/blockchain.js"
+	},
+	"devDependencies": {
+		"tsrpc-cli": "2.4.5"
+	}
+}
