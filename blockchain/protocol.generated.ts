@@ -3,6 +3,7 @@ import { MsgOnline } from './protocol/MsgOnline';
 import { MsgWalletUpdate } from './protocol/MsgWalletUpdate';
 import { ReqInit, ResInit } from './protocol/PtlInit';
 import { ReqWalletCreate, ResWalletCreate } from './protocol/PtlWalletCreate';
+import { ReqWalletQuery, ResWalletQuery } from './protocol/PtlWalletQuery';
 
 export interface ServiceType {
     api: {
@@ -13,6 +14,10 @@ export interface ServiceType {
         "WalletCreate": {
             req: ReqWalletCreate,
             res: ResWalletCreate
+        },
+        "WalletQuery": {
+            req: ReqWalletQuery,
+            res: ResWalletQuery
         }
     },
     msg: {
@@ -22,6 +27,7 @@ export interface ServiceType {
 }
 
 export const serviceProto: ServiceProto<ServiceType> = {
+    "version": 1,
     "services": [
         {
             "id": 0,
@@ -41,6 +47,11 @@ export const serviceProto: ServiceProto<ServiceType> = {
         {
             "id": 3,
             "name": "WalletCreate",
+            "type": "api"
+        },
+        {
+            "id": 4,
+            "name": "WalletQuery",
             "type": "api"
         }
     ],
@@ -140,6 +151,36 @@ export const serviceProto: ServiceProto<ServiceType> = {
                 {
                     "id": 1,
                     "name": "secrets",
+                    "type": {
+                        "type": "Interface",
+                        "indexSignature": {
+                            "keyType": "String",
+                            "type": {
+                                "type": "String"
+                            }
+                        }
+                    }
+                }
+            ]
+        },
+        "PtlWalletQuery/ReqWalletQuery": {
+            "type": "Interface",
+            "properties": [
+                {
+                    "id": 0,
+                    "name": "address",
+                    "type": {
+                        "type": "String"
+                    }
+                }
+            ]
+        },
+        "PtlWalletQuery/ResWalletQuery": {
+            "type": "Interface",
+            "properties": [
+                {
+                    "id": 0,
+                    "name": "balances",
                     "type": {
                         "type": "Interface",
                         "indexSignature": {
