@@ -12,7 +12,7 @@
 		"skipLibCheck": true
 	},
 	"include": [
-		"blockchain.ts",
+		"blockchain/sdk.ts",
 		"blockchain/**/*.ts"
 	],
 	"exclude": [

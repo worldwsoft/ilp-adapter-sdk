@@ -1,5 +1,6 @@
 import tsrpc from 'tsrpc'
-import { serviceProto, ServiceType } from './blockchain/protocol.generated'
+import { serviceProto, ServiceType } from './protocol.generated'
+import { ResInit, ReqWalletCreate, ReqWalletQuery } from './protocol'
 
 type RouterMethods = {
 	WalletCreate: Function
@@ -23,22 +24,22 @@ export function createRouterConnection({ chainId }: { chainId: string }): Router
 	}
 
 	client.flows.postConnectFlow.push(async () => {
-		await client.callApi('Init', {
+		const initResult: ResInit = await client.callApi('Init', {
 			chain: chainId,
 			implementedMethods: Object.keys(connection.methods)
 		})
 	})
 
-	client.listenMsg('WalletCreate' as any, async (req: any) => {
+	client.listenMsg('WalletCreate' as any, async (req: ReqWalletCreate) => {
 		if (!connection.methods.WalletCreate)
 			throw new Error('WalletCreate is not implemented')
 
 		return await connection.methods.WalletCreate(req)
 	})
 
-	client.listenMsg('WalletQuery' as any, async (req: any) => {
+	client.listenMsg('WalletQuery' as any, async (req: ReqWalletQuery) => {
 		if (!connection.methods.WalletQuery)
-		throw new Error('WalletQuery is not implemented')
+			throw new Error('WalletQuery is not implemented')
 
 		return await connection.methods.WalletQuery(req)
 	})
