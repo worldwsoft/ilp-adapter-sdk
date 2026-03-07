@@ -2,23 +2,25 @@
 	"name": "@oari/router-interface-sdk",
 	"version": "0.0.0",
 	"scripts": {
-		"build": "tsc -p tsconfig.json && npm run proto:blockchain",
-		"proto:blockchain": "npx tsrpc proto -i blockchain/protocol -o blockchain/protocol.generated.ts --verbose"
+		"build": "tsc -p tsconfig.json"
 	},
 	"exports": {
+		"./socket": {
+			"types": "./dist/socket.d.ts",
+			"default": "./dist/socket.js"
+		},
 		"./blockchain": {
-			"types": "./dist/blockchain/client.d.ts",
-			"default": "./dist/blockchain/client.js"
+			"types": "./dist/blockchain.d.ts",
+			"default": "./dist/blockchain.js"
 		}
 	},
 	"files": [
 		"dist"
 	],
 	"devDependencies": {
-		"tsrpc-cli": "2.4.5",
 		"typescript": "5.8.2"
 	},
 	"dependencies": {
-		"tsrpc": "3.4.21"
+		"@mwni/log": "3.4.0"
 	}
 }

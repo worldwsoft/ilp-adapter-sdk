@@ -1,5 +1,0 @@
-export * from './protocol/MsgOnline'
-export * from './protocol/MsgWalletUpdate'
-export * from './protocol/PtlInit'
-export * from './protocol/PtlWalletCreate'
-export * from './protocol/PtlWalletQuery'
