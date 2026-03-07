@@ -179,10 +179,13 @@ export function createQueuedCommandResultEventDispatcher(
 }
 
 export function createSocket(url: string): ReconnectingSocket {
-	let socket: WebSocket
+	let socket: WebSocket | null
 	let events = new EventEmitter()
 
 	function connect(){
+		if(socket)
+			return
+		
 		socket = new WebSocket(url)
 		socket.addEventListener('open', handleOpen)
 		socket.addEventListener('close', handleClose)
@@ -197,6 +200,7 @@ export function createSocket(url: string): ReconnectingSocket {
 	function handleClose(event: CloseEvent){
 		setTimeout(connect, 1000)
 		events.emit('close', event)
+		socket = null
 	}
 
 	function handleError(event: Event){
