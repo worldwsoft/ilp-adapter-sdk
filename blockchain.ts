@@ -34,7 +34,7 @@ export function createRouterConnection({ chainId }: { chainId: string }): Router
 	log.info(`connecting to master`)
 
 	const methods: Partial<BlockchainInterfaceMethods> = {}
-	const socket = createSocket(process.env.ROUTER_INTERFACE_URL || 'ws://localhost:8070')
+	const socket = createSocket(process.env.ROUTER_MASTER_URL || 'ws://master:70')
 	const { sendCommand, sendEvent } = createQueuedCommandResultEventDispatcher(
 		socket,
 		methods as SocketHandlers
