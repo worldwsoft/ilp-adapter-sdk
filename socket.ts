@@ -123,6 +123,7 @@ export function createQueuedCommandResultEventDispatcher(
 	})
 
 	function pushRequests(){
+		console.log('push', socket.readyState)
 		if(socket.readyState !== 1)
 			return
 
@@ -162,6 +163,7 @@ export function createQueuedCommandResultEventDispatcher(
 					})
 
 					requestRegistry.push(request)
+					console.log('queue', requestRegistry)
 					pushRequests()
 				}),
 				request
@@ -185,6 +187,8 @@ export function createSocket(url: string): ReconnectingSocket {
 	function connect(){
 		if(socket)
 			return
+
+		console.log('new socket')
 		
 		socket = new WebSocket(url)
 		socket.addEventListener('open', handleOpen)
@@ -194,16 +198,19 @@ export function createSocket(url: string): ReconnectingSocket {
 	}
 
 	function handleOpen(event: Event){
+		console.log('open', socket?.readyState)
 		events.emit('open', event)
 	}
 
 	function handleClose(event: CloseEvent){
+		console.log('close')
 		setTimeout(connect, 1000)
 		events.emit('close', event)
 		socket = null
 	}
 
 	function handleError(event: Event){
+		console.log('error', event)
 		events.emit('error', event)
 	}
 
@@ -220,6 +227,7 @@ export function createSocket(url: string): ReconnectingSocket {
 				return socket?.readyState
 			},
 			send(payload: JsonObject){
+				console.log('send', payload)
 				if(!socket)
 					throw new Error(`socket not connected`)
 
