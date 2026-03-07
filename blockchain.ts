@@ -32,10 +32,12 @@ export type RouterConnection = {
 }
 
 export function createRouterConnection({ chainId }: { chainId: string }): RouterConnection {
-	log.info(`connecting to master using sdk version ${pkg.version}`)
+	const masterUrl = process.env.ROUTER_MASTER_URL || 'ws://master:70/interface'
+
+	log.info(`connecting to master ${masterUrl} using sdk version ${pkg.version}`)
 
 	const methods: Partial<BlockchainInterfaceMethods> = {}
-	const socket = createSocket(process.env.ROUTER_MASTER_URL || 'ws://master:70')
+	const socket = createSocket(masterUrl)
 	const { sendCommand, sendEvent } = createQueuedCommandResultEventDispatcher(
 		socket,
 		methods as SocketHandlers
