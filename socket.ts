@@ -167,7 +167,7 @@ export function createQueuedCommandResultEventDispatcher(
 				request
 			) as unknown as QueuedCommandPromise
 		},
-			sendEvent(payload: SocketEventPayload){
+		sendEvent(payload: SocketEventPayload){
 			requestRegistry.push({
 				payload,
 				resolve: () => undefined,
