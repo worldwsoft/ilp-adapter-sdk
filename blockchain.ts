@@ -1,9 +1,15 @@
 import log from '@mwni/log'
-import { createSocket, createQueuedCommandResultEventDispatcher } from './socket'
+
 import { 
-	RegisterCommand, 
-	RegisterResult, 
-	OnlineEvent,
+	createSocket, 
+	createQueuedCommandResultEventDispatcher,
+	type SocketHandlers
+} from './socket'
+
+import { 
+	BlockchainRegisterCommand, 
+	BlockchainRegisterResult, 
+	BlockchainOnlineEvent,
 	WalletCreateCommand, 
 	WalletCreateResult,
 	WalletQueryCommand,
@@ -25,13 +31,13 @@ export type RouterConnection = {
 }
 
 export function createRouterConnection({ chainId }: { chainId: string }): RouterConnection {
-	log.info(`registering with master`)
+	log.info(`connecting to master`)
 
 	const methods: Partial<BlockchainInterfaceMethods> = {}
 	const socket = createSocket(process.env.ROUTER_INTERFACE_URL || 'ws://localhost:8070')
 	const { sendCommand, sendEvent } = createQueuedCommandResultEventDispatcher(
 		socket,
-		methods
+		methods as SocketHandlers
 	)
 
 	const connection: RouterConnection = {
@@ -42,13 +48,23 @@ export function createRouterConnection({ chainId }: { chainId: string }): Router
 	}
 
 	socket.on('open', () => {
+		log.info(`registering with master`)
+
 		sendCommand({
-			command: 'Register',
+			command: 'BlockchainRegister',
 			chainId,
 			implementedMethods: Object.keys(connection.methods)
-		} as RegisterCommand)
+		} as BlockchainRegisterCommand)
 			.then(() => log.info(`successfully registered with master`))
 			.catch(error => log.error(`failed to register with master: ${error.message}`))
+	})
+
+	socket.on('close', () => {
+		log.warn(`connection to master closed`)
+	})
+
+	socket.on('error', (error: any) => {
+		log.error(`master connection error`)
 	})
 
 	return connection
@@ -57,10 +73,10 @@ export function createRouterConnection({ chainId }: { chainId: string }): Router
 export function dispatchOnline(connection: RouterConnection, online: boolean, error?: string){
 	log.info(`dispatched online status: ${online}`)
 	connection.sendEvent({
-		event: 'Online',
+		event: 'BlockchainOnline',
 		online,
 		error
-	} as OnlineEvent)
+	} as BlockchainOnlineEvent)
 }
 
 export function implementWalletCreate(

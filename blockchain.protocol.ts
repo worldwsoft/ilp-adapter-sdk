@@ -2,18 +2,18 @@ export type Caip2ChainId = `${string}:${string}`
 export type Caip10WalletAddress = `${string}:${string}:${string}`
 export type Caip19AssetId = `${string}:${string}/${string}:${string}`
 
-export type RegisterCommand = {
-	command: 'Register',
+export type BlockchainRegisterCommand = {
+	command: 'BlockchainRegister',
 	chainId: Caip2ChainId,
 	implementedMethods: Array<string>
 }
 
-export type RegisterResult = {
+export type BlockchainRegisterResult = {
 
 }
 
-export type OnlineEvent = {
-	event: 'Online',
+export type BlockchainOnlineEvent = {
+	event: 'BlockchainOnline',
 	online: boolean,
 	error?: string
 }
