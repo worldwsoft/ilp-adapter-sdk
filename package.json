@@ -1,6 +1,6 @@
 {
 	"name": "@oari/router-interface-sdk",
-	"version": "0.0.0",
+	"version": "0.0.1",
 	"scripts": {
 		"build": "tsc -p tsconfig.json"
 	},
@@ -12,6 +12,10 @@
 		"./blockchain": {
 			"types": "./dist/blockchain.d.ts",
 			"default": "./dist/blockchain.js"
+		},
+		"./blockchain/protocol": {
+			"types": "./dist/blockchain.protocol.d.ts",
+			"default": "./dist/blockchain.protocol.js"
 		}
 	},
 	"files": [
