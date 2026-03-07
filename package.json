@@ -1,6 +1,6 @@
 {
 	"name": "@oari/router-interface-sdk",
-	"version": "0.0.5",
+	"version": "0.0.6",
 	"scripts": {
 		"prepare": "npm run build",
 		"build": "tsc -p tsconfig.json"

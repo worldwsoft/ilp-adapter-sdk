@@ -33,9 +33,6 @@ export type RouterConnection = {
 
 export function createRouterConnection({ chainId }: { chainId: string }): RouterConnection {
 	const masterUrl = process.env.ROUTER_MASTER_URL || 'ws://master:70/interface'
-
-	log.info(`connecting to master ${masterUrl} using sdk version ${pkg.version}`)
-
 	const methods: Partial<BlockchainInterfaceMethods> = {}
 	const socket = createSocket(masterUrl)
 	const { sendCommand, sendEvent } = createQueuedCommandResultEventDispatcher(
@@ -43,6 +40,17 @@ export function createRouterConnection({ chainId }: { chainId: string }): Router
 		methods as SocketHandlers
 	)
 
+	log.info(`connecting to master ${masterUrl} using sdk version ${pkg.version}`)
+
+	const sendRegistration = () => sendCommand({
+		command: 'BlockchainRegister',
+		chainId,
+		implementedMethods: Object.keys(methods)
+	} as BlockchainRegisterCommand)
+		.then(() => log.info(`successfully registered with master`))
+		.catch(error => log.error(`failed to register with master: ${error.message}`))
+
+		
 	const connection: RouterConnection = {
 		socket,
 		sendCommand,
@@ -51,24 +59,19 @@ export function createRouterConnection({ chainId }: { chainId: string }): Router
 	}
 
 	socket.on('open', () => {
-		log.info(`registering with master`)
-
-		sendCommand({
-			command: 'BlockchainRegister',
-			chainId,
-			implementedMethods: Object.keys(connection.methods)
-		} as BlockchainRegisterCommand)
-			.then(() => log.info(`successfully registered with master`))
-			.catch(error => log.error(`failed to register with master: ${error.message}`))
+		log.info(`connection to master opened`)
 	})
 
 	socket.on('close', () => {
 		log.warn(`connection to master closed`)
+		socket.once('open', sendRegistration)
 	})
 
 	socket.on('error', (error: any) => {
 		log.error(`master connection error`)
 	})
+
+	sendRegistration()
 
 	return connection
 }
