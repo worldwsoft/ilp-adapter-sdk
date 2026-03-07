@@ -21,7 +21,13 @@ export interface SocketEventPayload {
 	event: string
 }
 
-type SocketIncomingPayload = SocketCommandPayload | SocketEventPayload
+export interface SocketResultPayload {
+	[key: string]: unknown
+	requestId?: string
+	error?: unknown
+}
+
+type SocketIncomingPayload = SocketCommandPayload | SocketEventPayload | SocketResultPayload
 
 type CommandHandler<TPayload extends SocketCommandPayload = SocketCommandPayload, TResult = unknown> =
 	(payload: TPayload) => TResult | Promise<TResult>
@@ -35,17 +41,13 @@ interface SocketCloseLikeEvent {
 	reason?: string
 }
 
-interface SocketMessageLikeEvent {
-	data: string
-}
-
 export interface ReconnectingSocket extends EventEmitter {
 	readyState: number
 	on(event: 'open', listener: (event: Event) => void): this
 	on(event: 'close', listener: (event: SocketCloseLikeEvent) => void): this
 	on(event: 'error', listener: (event: Event) => void): this
 	on(event: 'message', listener: (payload: SocketIncomingPayload) => void): this
-	send(payload: SocketCommandPayload | SocketEventPayload): void
+	send(payload: SocketCommandPayload | SocketEventPayload | SocketResultPayload): void
 }
 
 interface PendingRequest<TResult = unknown> {
@@ -87,27 +89,30 @@ export function createQueuedCommandResultEventDispatcher(
 	})
 
 	socket.on('message', async payload => {
-		if(payload.requestId){
+		if(payload.command){
 			let commandPayload = payload as SocketCommandPayload
-			let handlerIndex = requestRegistry
-				.findIndex(({ requestId }) => requestId === commandPayload.requestId)
+			let handler = handlers[commandPayload.command] as CommandHandler | undefined
 
-			if(handlerIndex >= 0){
-				let request = requestRegistry[handlerIndex]
-				let handler = handlers[commandPayload.command] as CommandHandler | undefined
+			try{
+				if(!handler)
+					throw new Error(`unknown command "${commandPayload.command}"`)
 
-				try{
-					if(!handler)
-						throw new Error(`unknown command "${commandPayload.command}"`)
+				let commandResult = await handler(commandPayload)
+				let resultPayload = (
+					commandResult && typeof commandResult === 'object'
+				) ? commandResult as Record<string, unknown> : {}
 
-					request.resolve(
-						await handler(commandPayload)
-					)
-				}catch(error){
-					request.reject(error)
-				}finally{
-					requestRegistry.splice(handlerIndex, 1)
-				}
+				socket.send({
+					...resultPayload,
+					requestId: commandPayload.requestId
+				})
+			}catch(error){
+				let errorMessage = error instanceof Error ? error.message : String(error)
+
+				socket.send({
+					error: errorMessage,
+					requestId: commandPayload.requestId
+				})
 			}
 		}else if(payload.event){
 			let eventPayload = payload as SocketEventPayload
@@ -117,6 +122,26 @@ export function createQueuedCommandResultEventDispatcher(
 				throw new Error(`unknown event "${eventPayload.event}"`)
 
 			handler(eventPayload)
+		}else if(payload.requestId){
+			let resultPayload = payload as SocketResultPayload
+			let handlerIndex = requestRegistry
+				.findIndex(({ requestId }) => requestId === resultPayload.requestId)
+
+			if(handlerIndex === -1)
+				return
+
+			let { resolve, reject } = requestRegistry[handlerIndex] as PendingRequest<SocketResultPayload>
+
+			try{
+				if(resultPayload.error)
+					reject(resultPayload)
+				else
+					resolve(resultPayload)
+			}catch(error){
+				throw error
+			}finally{
+				requestRegistry.splice(handlerIndex, 1)
+			}
 		}else{
 			throw new Error(`unexpected message format: ${JSON.stringify(payload)}`)
 		}
@@ -228,7 +253,7 @@ export function createSocket(url: string): ReconnectingSocket {
 		{
 			readyState: {
 				get(){
-					return socket?.readyState
+					return socket?.readyState ?? WebSocket.CLOSED
 				},
 				enumerable: true,
 				configurable: true
