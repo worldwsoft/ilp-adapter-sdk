@@ -217,9 +217,12 @@ export function createSocket(url: string): ReconnectingSocket {
 		events,
 		{
 			get readyState(){
-				return socket.readyState
+				return socket?.readyState
 			},
 			send(payload: JsonObject){
+				if(!socket)
+					throw new Error(`socket not connected`)
+
 				socket.send(JSON.stringify(payload))
 			}
 		}

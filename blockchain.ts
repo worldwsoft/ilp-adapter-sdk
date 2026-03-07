@@ -1,4 +1,5 @@
 import log from '@mwni/log'
+import pkg from './package.json'
 
 import { 
 	createSocket, 
@@ -31,7 +32,7 @@ export type RouterConnection = {
 }
 
 export function createRouterConnection({ chainId }: { chainId: string }): RouterConnection {
-	log.info(`connecting to master`)
+	log.info(`connecting to master using sdk version ${pkg.version}`)
 
 	const methods: Partial<BlockchainInterfaceMethods> = {}
 	const socket = createSocket(process.env.ROUTER_MASTER_URL || 'ws://master:70')
