@@ -1,38 +1,45 @@
 export type Caip2ChainId = `${string}:${string}`
-export type Caip10WalletAddress = `${string}:${string}:${string}`
-export type Caip19AssetId = `${string}:${string}/${string}:${string}`
+export type Caip10WalletAddress = `${Caip2ChainId}:${string}`
+export type Caip19AssetId = `${Caip2ChainId}/${string}:${string}`
 
-export type BlockchainRegisterCommand = {
-	command: 'BlockchainRegister',
-	chainId: Caip2ChainId,
-	implementedMethods: Array<string>
+export type BlockchainMethod = 'WalletCreate' | 'WalletQuery'
+
+export type WalletSecrets = Record<string, string>
+export type WalletBalances = Record<Caip19AssetId, string>
+
+export interface BlockchainRegisterCommand {
+	command: 'BlockchainRegister'
+	chainId: Caip2ChainId
+	implementedMethods: BlockchainMethod[]
 }
 
-export type BlockchainRegisterResult = {
+export type BlockchainRegisterResult = Record<string, never>
 
-}
-
-export type BlockchainOnlineEvent = {
-	event: 'BlockchainOnline',
-	online: boolean,
-	error?: string
-}
-
-export type WalletCreateCommand = {
+export interface WalletCreateCommand {
 	command: 'WalletCreate'
 	entropy: string
 }
 
-export type WalletCreateResult = {
-	address: Caip10WalletAddress,
-	secrets: Record<string, string>
+export interface WalletCreateResult {
+	address: Caip10WalletAddress
+	secrets: WalletSecrets
 }
 
-export type WalletQueryCommand = {
+export interface WalletQueryCommand {
 	command: 'WalletQuery'
 	address: Caip10WalletAddress
 }
 
-export type WalletQueryResult = {
-	balances: Record<Caip19AssetId, string>
+export interface WalletQueryResult {
+	balances: WalletBalances
 }
+
+export type BlockchainCommand =
+	| BlockchainRegisterCommand
+	| WalletCreateCommand
+	| WalletQueryCommand
+
+export type BlockchainResult =
+	| BlockchainRegisterResult
+	| WalletCreateResult
+	| WalletQueryResult

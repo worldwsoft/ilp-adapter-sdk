@@ -4,13 +4,16 @@ import pkg from './package.json'
 import { 
 	createSocket, 
 	createQueuedCommandResultEventDispatcher,
+	type QueuedCommandResultEventDispatcher,
+	type ReconnectingSocket,
 	type SocketHandlers
 } from './socket'
 
 import { 
+	Caip2ChainId, 
+	type BlockchainMethod,
 	BlockchainRegisterCommand, 
 	BlockchainRegisterResult, 
-	BlockchainOnlineEvent,
 	WalletCreateCommand, 
 	WalletCreateResult,
 	WalletQueryCommand,
@@ -19,94 +22,114 @@ import {
 
 
 type BlockchainInterfaceMethods = {
-	WalletCreate: Function
-	WalletQuery: Function
-	WalletWatch: Function
+	WalletCreate: (args: WalletCreateCommand) => Promise<WalletCreateResult>
+	WalletQuery: (args: WalletQueryCommand) => Promise<WalletQueryResult>
 }
 
-export type RouterConnection = {
-	socket: any,
-	sendCommand: Function,
-	sendEvent: Function,
-	methods: Partial<BlockchainInterfaceMethods>
+type BlockchainMethodImplementations = Partial<BlockchainInterfaceMethods>
+type Logger = ReturnType<typeof log.fork>
+
+interface BlockchainRegistration {
+	socket: ReconnectingSocket
+	sendCommand: QueuedCommandResultEventDispatcher['sendCommand']
+	sendEvent: QueuedCommandResultEventDispatcher['sendEvent']
+	methods: BlockchainMethodImplementations
+	logger: Logger
 }
 
-export function createRouterConnection({ chainId }: { chainId: string }): RouterConnection {
+const registrations: Partial<Record<Caip2ChainId, BlockchainRegistration>> = {}
+const methodsByChain: Partial<Record<Caip2ChainId, BlockchainMethodImplementations>> = {}
+
+function getMethods(chainId: Caip2ChainId): BlockchainMethodImplementations {
+	return (methodsByChain[chainId] ??= {})
+}
+
+function getRegistration(chainId: Caip2ChainId): BlockchainRegistration {
+	const registration = registrations[chainId]
+
+	if(!registration)
+		throw new Error(`chain "${chainId}" is not registered`)
+
+	return registration
+}
+
+function getImplementedMethods(methods: BlockchainMethodImplementations): BlockchainMethod[] {
+	return Object.keys(methods) as BlockchainMethod[]
+}
+
+export function register(chainId: Caip2ChainId){
+	if(registrations[chainId])
+		return
+
+	const logger = log.fork({ name: chainId, root: undefined })
 	const masterUrl = process.env.ROUTER_MASTER_URL || 'ws://master:70/interface'
-	const methods: Partial<BlockchainInterfaceMethods> = {}
+	const methods = getMethods(chainId)
 	const socket = createSocket(masterUrl)
 	const { sendCommand, sendEvent } = createQueuedCommandResultEventDispatcher(
 		socket,
-		methods as SocketHandlers
+		methods as unknown as SocketHandlers
 	)
 
-	log.info(`connecting to master ${masterUrl} using sdk version ${pkg.version}`)
-
-	const sendRegistration = () => sendCommand({
-		command: 'BlockchainRegister',
-		chainId,
-		implementedMethods: Object.keys(methods)
-	} as BlockchainRegisterCommand)
-		.then(() => log.info(`successfully registered with master`))
-		.catch(error => log.error(`failed to register with master: ${error.message}`))
-
-		
-	const connection: RouterConnection = {
+	registrations[chainId] = {
 		socket,
 		sendCommand,
 		sendEvent,
-		methods
+		methods,
+		logger
 	}
 
 	socket.on('open', () => {
-		log.info(`connection to master opened`)
+		logger.info(`connection to master opened - sending registration`)
+
+		sendCommand<BlockchainRegisterResult>({
+			command: 'BlockchainRegister',
+			chainId,
+			implementedMethods: getImplementedMethods(methods)
+		} satisfies BlockchainRegisterCommand)
+			.then(() => logger.info(`successfully registered with master`))
+			.catch(error => logger.error(`failed to register with master: ${error.message}`))
 	})
 
 	socket.on('close', () => {
-		log.warn(`connection to master closed`)
-		socket.once('open', sendRegistration)
+		logger.warn(`connection to master closed`)
 	})
 
-	socket.on('error', (error: any) => {
-		log.error(`master connection error`)
+	socket.on('error', () => {
+		logger.debug(`master connection error`)
 	})
 
-	sendRegistration()
-
-	return connection
+	logger.info(`connecting to master ${masterUrl} using sdk version ${pkg.version}`)
 }
 
-export function dispatchOnline(connection: RouterConnection, online: boolean, error?: string){
-	log.info(`dispatched online status: ${online}`)
-	connection.sendEvent({
-		event: 'BlockchainOnline',
-		online,
-		error
-	} as BlockchainOnlineEvent)
+
+export function unregister(chainId: Caip2ChainId, reason?: string){
+	const registration = registrations[chainId]
+
+	if(!registration)
+		return
+
+	registration.logger.info(`unregistering from master with reason "${reason}"`)
+	registration.socket.close(4000, reason)
+	delete registrations[chainId]
 }
 
 export function implementWalletCreate(
-	connection: RouterConnection, 
+	chainId: Caip2ChainId,
 	walletCreate: (args: WalletCreateCommand) => Promise<WalletCreateResult>
 ){
-	connection.methods.WalletCreate = async (args: WalletCreateCommand) => {
+	getMethods(chainId).WalletCreate = async (args: WalletCreateCommand) => {
 		const wallet = await walletCreate(args)
-		log.info(`created wallet: ${wallet.address}`)
+		registrations[chainId]?.logger.info(`created wallet: ${wallet.address}`)
 		return wallet
 	}
 }
 
 export function implementWalletQuery(
-	connection: RouterConnection,
+	chainId: Caip2ChainId,
 	walletQuery: (args: WalletQueryCommand) => Promise<WalletQueryResult>
 ){
-	connection.methods.WalletQuery = async (args: WalletQueryCommand) => {
-		log.info(`querying wallet ${args.address}`)
+	getMethods(chainId).WalletQuery = async (args: WalletQueryCommand) => {
+		registrations[chainId]?.logger.info(`querying wallet ${args.address}`)
 		return await walletQuery(args)
 	}
 }
-
-/*
-export function implementWalletWatch(connection: RouterConnection, method: Function) {
-	connection.methods.WalletWatch = method
-}*/
