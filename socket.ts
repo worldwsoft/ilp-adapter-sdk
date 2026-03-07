@@ -1,7 +1,80 @@
 import { EventEmitter } from 'node:events'
 
-export function createQueuedCommandResultEventDispatcher(socket, handlers){
-	let requestRegistry = []
+type JsonPrimitive = string | number | boolean | null
+type JsonValue = JsonPrimitive | JsonObject | JsonValue[]
+
+interface JsonObject {
+	[key: string]: JsonValue
+}
+
+type PromiseResolver<T> = (value: T | PromiseLike<T>) => void
+type PromiseRejecter = (reason?: unknown) => void
+
+export interface SocketCommandPayload {
+	[key: string]: unknown
+	command: string
+	requestId?: string
+}
+
+export interface SocketEventPayload {
+	[key: string]: unknown
+	event: string
+}
+
+type SocketIncomingPayload = SocketCommandPayload | SocketEventPayload
+
+type CommandHandler<TPayload extends SocketCommandPayload = SocketCommandPayload, TResult = unknown> =
+	(payload: TPayload) => TResult | Promise<TResult>
+
+type EventHandler<TPayload extends SocketEventPayload = SocketEventPayload> =
+	(payload: TPayload) => void
+
+export type SocketHandlers = Record<string, CommandHandler | EventHandler>
+
+interface SocketCloseLikeEvent {
+	reason?: string
+}
+
+interface SocketMessageLikeEvent {
+	data: string
+}
+
+export interface ReconnectingSocket extends EventEmitter {
+	readyState: number
+	on(event: 'open', listener: (event: Event) => void): this
+	on(event: 'close', listener: (event: SocketCloseLikeEvent) => void): this
+	on(event: 'error', listener: (event: Event) => void): this
+	on(event: 'message', listener: (payload: SocketIncomingPayload) => void): this
+	send(payload: SocketCommandPayload | SocketEventPayload): void
+}
+
+interface PendingRequest<TResult = unknown> {
+	requestId?: string
+	payload: SocketCommandPayload | SocketEventPayload
+	sent?: boolean
+	resolve: PromiseResolver<TResult>
+	reject: PromiseRejecter
+}
+
+export interface QueuedCommandPromise<TResult = unknown> extends Promise<TResult> {
+	requestId: string
+	payload: SocketCommandPayload
+}
+
+export interface QueuedCommandResultEventDispatcher {
+	sendCommand(payload: Omit<SocketCommandPayload, 'requestId'>): QueuedCommandPromise
+	sendEvent(payload: SocketEventPayload): void
+}
+
+type CommandRequestPayload = Omit<SocketCommandPayload, 'requestId'> & {
+	command: string
+}
+
+export function createQueuedCommandResultEventDispatcher(
+	socket: ReconnectingSocket,
+	handlers: SocketHandlers
+): QueuedCommandResultEventDispatcher {
+	let requestRegistry: PendingRequest[] = []
 	let requestCounter = 0
 
 	socket.on('open', pushRequests)
@@ -13,20 +86,22 @@ export function createQueuedCommandResultEventDispatcher(socket, handlers){
 		requestRegistry.length = 0
 	})
 
-	socket.on('message', (payload: any) => {
+	socket.on('message', async payload => {
 		if(payload.requestId){
+			let commandPayload = payload as SocketCommandPayload
 			let handlerIndex = requestRegistry
-				.findIndex(({ requestId }) => requestId === payload.requestId)
+				.findIndex(({ requestId }) => requestId === commandPayload.requestId)
 
 			if(handlerIndex >= 0){
 				let request = requestRegistry[handlerIndex]
+				let handler = handlers[commandPayload.command] as CommandHandler | undefined
 
 				try{
-					if(handlers[payload.command])
-						throw new Error(`unknown command "${payload.command}"`)
+					if(!handler)
+						throw new Error(`unknown command "${commandPayload.command}"`)
 
 					request.resolve(
-						await handlers[payload.command](payload)
+						await handler(commandPayload)
 					)
 				}catch(error){
 					request.reject(error)
@@ -35,10 +110,13 @@ export function createQueuedCommandResultEventDispatcher(socket, handlers){
 				}
 			}
 		}else if(payload.event){
-			if(handlers[payload.command])
-				throw new Error(`unknown event "${payload.event}"`)
+			let eventPayload = payload as SocketEventPayload
+			let handler = handlers[eventPayload.event] as EventHandler | undefined
 
-			handlers[payload.event](payload)
+			if(!handler)
+				throw new Error(`unknown event "${eventPayload.event}"`)
+
+			handler(eventPayload)
 		}else{
 			throw new Error(`unexpected message format: ${JSON.stringify(payload)}`)
 		}
@@ -62,18 +140,22 @@ export function createQueuedCommandResultEventDispatcher(socket, handlers){
 	}
 
 	return {
-		async sendCommand(payload: any){
+		sendCommand(payload: CommandRequestPayload){
 			let requestId = `r${++requestCounter}`
-			let request = {
+			let requestPayload: SocketCommandPayload = {
+				...payload,
+				requestId
+			}
+
+			let request: PendingRequest = {
 				requestId,
-				payload: {
-					...payload,
-					requestId
-				}
+				payload: requestPayload,
+				resolve: () => undefined,
+				reject: () => undefined
 			}
 
 			return Object.assign(
-				new Promise((resolve, reject) => {
+				new Promise<unknown>((resolve, reject) => {
 					Object.assign(request, {
 						resolve,
 						reject
@@ -83,16 +165,20 @@ export function createQueuedCommandResultEventDispatcher(socket, handlers){
 					pushRequests()
 				}),
 				request
-			)
+			) as unknown as QueuedCommandPromise
 		},
-		sendEvent(payload: any){
-			requestRegistry.push({ payload })
+			sendEvent(payload: SocketEventPayload){
+			requestRegistry.push({
+				payload,
+				resolve: () => undefined,
+				reject: () => undefined
+			})
 			pushRequests()
 		}
 	}
 }
 
-export function createSocket(url: string){
+export function createSocket(url: string): ReconnectingSocket {
 	let socket: WebSocket
 	let events = new EventEmitter()
 
@@ -104,21 +190,21 @@ export function createSocket(url: string){
 		socket.addEventListener('message', handleMessage)
 	}
 
-	function handleOpen(event){
+	function handleOpen(event: Event){
 		events.emit('open', event)
 	}
 
-	function handleClose(event){
+	function handleClose(event: CloseEvent){
 		setTimeout(connect, 1000)
 		events.emit('close', event)
 	}
 
-	function handleError(event){
+	function handleError(event: Event){
 		events.emit('error', event)
 	}
 
-	function handleMessage(evt){
-		events.emit('message', JSON.parse(evt.data))
+	function handleMessage(evt: MessageEvent<string>){
+		events.emit('message', JSON.parse(evt.data) as SocketIncomingPayload)
 	}
 
 	connect()
@@ -126,9 +212,12 @@ export function createSocket(url: string){
 	return Object.assign(
 		events,
 		{
-			send(payload: any){
+			get readyState(){
+				return socket.readyState
+			},
+			send(payload: JsonObject){
 				socket.send(JSON.stringify(payload))
 			}
 		}
-	)
+	) as ReconnectingSocket
 }
