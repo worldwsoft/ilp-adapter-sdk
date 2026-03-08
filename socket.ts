@@ -37,6 +37,7 @@ interface SocketCloseLikeEvent {
 
 export interface ReconnectingSocket extends EventEmitter {
 	readyState: number
+	on(event: 'connecting', listener: (event: Event) => void): this
 	on(event: 'open', listener: (event: Event) => void): this
 	on(event: 'close', listener: (event: SocketCloseLikeEvent) => void): this
 	on(event: 'error', listener: (event: Event) => void): this
@@ -226,6 +227,7 @@ export function createSocket(url: string): ReconnectingSocket {
 		socket.addEventListener('close', handleClose)
 		socket.addEventListener('error', handleError)
 		socket.addEventListener('message', handleMessage)
+		events.emit('connecting')
 	}
 
 	function handleOpen(event: Event){

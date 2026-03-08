@@ -1,7 +1,7 @@
-import log from '@mwni/log'
+import pino from 'pino'
 import pkg from './package.json'
 
-import { 
+import {
 	createSocket, 
 	createQueuedCommandResultEventDispatcher,
 	type QueuedCommandResultEventDispatcher,
@@ -27,14 +27,21 @@ type BlockchainInterfaceMethods = {
 }
 
 type BlockchainMethodImplementations = Partial<BlockchainInterfaceMethods>
-type Logger = ReturnType<typeof log.fork>
+
+export interface LoggerLike {
+	info: (...args: unknown[]) => void
+	warn: (...args: unknown[]) => void
+	error: (...args: unknown[]) => void
+	debug: (...args: unknown[]) => void
+	child: (bindings: Record<string, unknown>) => LoggerLike
+}
 
 interface BlockchainRegistration {
 	socket: ReconnectingSocket
 	sendCommand: QueuedCommandResultEventDispatcher['sendCommand']
 	sendEvent: QueuedCommandResultEventDispatcher['sendEvent']
 	methods: BlockchainMethodImplementations
-	logger: Logger
+	logger: LoggerLike
 }
 
 const registrations: Partial<Record<Caip2ChainId, BlockchainRegistration>> = {}
@@ -44,24 +51,21 @@ function getMethods(chainId: Caip2ChainId): BlockchainMethodImplementations {
 	return (methodsByChain[chainId] ??= {})
 }
 
-function getRegistration(chainId: Caip2ChainId): BlockchainRegistration {
-	const registration = registrations[chainId]
-
-	if(!registration)
-		throw new Error(`chain "${chainId}" is not registered`)
-
-	return registration
-}
-
 function getImplementedMethods(methods: BlockchainMethodImplementations): BlockchainMethod[] {
 	return Object.keys(methods) as BlockchainMethod[]
+}
+
+export let logger: LoggerLike = pino({ enabled: false })
+
+export function setLogger(nextLogger: LoggerLike){
+	logger = nextLogger
 }
 
 export function register(chainId: Caip2ChainId){
 	if(registrations[chainId])
 		return
 
-	const logger = log.fork({ name: chainId, root: undefined })
+	const registrationLogger = logger.child({ chainId })
 	const masterUrl = process.env.ROUTER_MASTER_URL || 'ws://master:70/interface'
 	const methods = getMethods(chainId)
 	const socket = createSocket(masterUrl)
@@ -75,30 +79,34 @@ export function register(chainId: Caip2ChainId){
 		sendCommand,
 		sendEvent,
 		methods,
-		logger
+		logger: registrationLogger
 	}
 
+	socket.on('connecting', () => {
+		registrationLogger.info(`reconnecting to master ${masterUrl} using sdk version ${pkg.version}`)
+	})
+
+	socket.on('error', () => {
+		registrationLogger.info(`failed to connect to master`)
+	})
+
 	socket.on('open', () => {
-		logger.info(`connection to master opened - sending registration`)
+		registrationLogger.info(`connection to master opened - sending registration`)
+
+		socket.once('close', () => {
+			registrationLogger.warn(`connection to master closed`)
+		})
 
 		sendCommand<BlockchainRegisterResult>({
 			command: 'BlockchainRegister',
 			chainId,
 			implementedMethods: getImplementedMethods(methods)
 		} satisfies BlockchainRegisterCommand)
-			.then(() => logger.info(`successfully registered with master`))
-			.catch(error => logger.error(`failed to register with master: ${error.message}`))
+			.then(() => registrationLogger.info(`successfully registered with master`))
+			.catch(error => registrationLogger.error(`failed to register with master: ${error.message}`))
 	})
 
-	socket.on('close', () => {
-		logger.warn(`connection to master closed`)
-	})
-
-	socket.on('error', () => {
-		logger.debug(`master connection error`)
-	})
-
-	logger.info(`connecting to master ${masterUrl} using sdk version ${pkg.version}`)
+	registrationLogger.info(`connecting to master ${masterUrl} using sdk version ${pkg.version}`)
 }
 
 
