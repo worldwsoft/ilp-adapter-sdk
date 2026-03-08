@@ -1,6 +1,6 @@
 {
 	"name": "@oari/router-interface-sdk",
-	"version": "0.0.9",
+	"version": "0.0.10",
 	"scripts": {
 		"prepare": "npm run build",
 		"build": "tsc -p tsconfig.json"
@@ -28,6 +28,6 @@
 	},
 	"dependencies": {
 		"@mwni/events": "3.1.0",
-		"@mwni/log": "3.4.0"
+		"@mwni/log": "3.5.0"
 	}
 }
