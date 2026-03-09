@@ -9,19 +9,22 @@ import {
 	type SocketHandlers
 } from './socket'
 
-import { 
+import type { 
 	Caip2ChainId, 
-	type BlockchainMethod,
+	BlockchainMethod,
 	BlockchainRegisterCommand, 
 	BlockchainRegisterResult, 
+	WalletVerifyCommand,
+	WalletVerifyResult,
 	WalletCreateCommand, 
 	WalletCreateResult,
 	WalletQueryCommand,
-	WalletQueryResult
+	WalletQueryResult,
 } from './blockchain.protocol'
 
 
 type BlockchainInterfaceMethods = {
+	WalletVerify: (args: WalletVerifyCommand) => Promise<WalletVerifyResult>
 	WalletCreate: (args: WalletCreateCommand) => Promise<WalletCreateResult>
 	WalletQuery: (args: WalletQueryCommand) => Promise<WalletQueryResult>
 }
@@ -120,6 +123,18 @@ export function unregister(chainId: Caip2ChainId, reason?: string){
 	registration.socket.close(4000, reason)
 	delete registrations[chainId]
 }
+
+export function implementWalletVerify(
+	chainId: Caip2ChainId,
+	walletVerify: (args: WalletVerifyCommand) => Promise<WalletVerifyResult>
+){
+	getMethods(chainId).WalletVerify = async (args: WalletVerifyCommand) => {
+		const wallet = await walletVerify(args)
+		registrations[chainId]?.logger.info(`verified wallet: ${wallet.address}`)
+		return wallet
+	}
+}
+
 
 export function implementWalletCreate(
 	chainId: Caip2ChainId,
