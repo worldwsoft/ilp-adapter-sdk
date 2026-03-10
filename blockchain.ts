@@ -20,7 +20,8 @@ import type {
 	WalletCreateResult,
 	WalletQueryCommand,
 	WalletQueryResult,
-	WalletWatchCommand,
+	WalletSubscribeCommand,
+	WalletUnsubscribeCommand,
 	WalletUpdateEvent,
 } from './blockchain.protocol'
 
@@ -29,7 +30,8 @@ type BlockchainInterfaceMethods = {
 	WalletVerify: (args: WalletVerifyCommand) => Promise<WalletVerifyResult>
 	WalletCreate: (args: WalletCreateCommand) => Promise<WalletCreateResult>
 	WalletQuery: (args: WalletQueryCommand) => Promise<WalletQueryResult>
-	WalletWatch: (args: WalletWatchCommand) => Promise<void>
+	WalletSubscribe: (args: WalletSubscribeCommand) => Promise<void>
+	WalletUnsubscribe: (args: WalletUnsubscribeCommand) => Promise<void>
 }
 
 type BlockchainMethodImplementations = Partial<BlockchainInterfaceMethods>
@@ -160,19 +162,29 @@ export function implementWalletQuery(
 	}
 }
 
-export function implementWalletWatch(
+export function implementWalletSubscribe(
 	chainId: Caip2ChainId,
-	walletWatch: (args: WalletWatchCommand) => Promise<void>
+	walletSubscribe: (args: WalletSubscribeCommand) => Promise<void>
 ){
-	getMethods(chainId).WalletWatch = async (args: WalletWatchCommand) => {
-		registrations[chainId]?.logger.info(`watching ${args.addresses.length} wallet(s)`)
-		await walletWatch(args)
+	getMethods(chainId).WalletSubscribe = async (args: WalletSubscribeCommand) => {
+		registrations[chainId]?.logger.info(`subscribing wallet ${args.address}`)
+		await walletSubscribe(args)
+	}
+}
+
+export function implementWalletUnsubscribe(
+	chainId: Caip2ChainId,
+	walletUnsubscribe: (args: WalletUnsubscribeCommand) => Promise<void>
+){
+	getMethods(chainId).WalletUnsubscribe = async (args: WalletUnsubscribeCommand) => {
+		registrations[chainId]?.logger.info(`unsubscribing wallet ${args.address}`)
+		await walletUnsubscribe(args)
 	}
 }
 
 export function dispatchWalletUpdate(
 	chainId: Caip2ChainId,
-	address: WalletWatchCommand['addresses'][number],
+	address: WalletUpdateEvent['address'],
 	result: Pick<WalletUpdateEvent, 'balances'>
 ){
 	const registration = registrations[chainId]
