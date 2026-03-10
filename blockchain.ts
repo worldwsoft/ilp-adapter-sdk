@@ -20,6 +20,8 @@ import type {
 	WalletCreateResult,
 	WalletQueryCommand,
 	WalletQueryResult,
+	WalletWatchCommand,
+	WalletUpdateEvent,
 } from './blockchain.protocol'
 
 
@@ -27,6 +29,7 @@ type BlockchainInterfaceMethods = {
 	WalletVerify: (args: WalletVerifyCommand) => Promise<WalletVerifyResult>
 	WalletCreate: (args: WalletCreateCommand) => Promise<WalletCreateResult>
 	WalletQuery: (args: WalletQueryCommand) => Promise<WalletQueryResult>
+	WalletWatch: (args: WalletWatchCommand) => Promise<void>
 }
 
 type BlockchainMethodImplementations = Partial<BlockchainInterfaceMethods>
@@ -155,4 +158,33 @@ export function implementWalletQuery(
 		registrations[chainId]?.logger.info(`querying wallet ${args.address}`)
 		return await walletQuery(args)
 	}
+}
+
+export function implementWalletWatch(
+	chainId: Caip2ChainId,
+	walletWatch: (args: WalletWatchCommand) => Promise<void>
+){
+	getMethods(chainId).WalletWatch = async (args: WalletWatchCommand) => {
+		registrations[chainId]?.logger.info(`watching ${args.addresses.length} wallet(s)`)
+		await walletWatch(args)
+	}
+}
+
+export function dispatchWalletUpdate(
+	chainId: Caip2ChainId,
+	address: WalletWatchCommand['addresses'][number],
+	result: Pick<WalletUpdateEvent, 'balances'>
+){
+	const registration = registrations[chainId]
+
+	if(!registration)
+		return
+
+	registration.sendEvent({
+		event: 'WalletUpdate',
+		address,
+		balances: result.balances
+	} satisfies WalletUpdateEvent)
+
+	registration.logger.info(`dispatched wallet update for ${address}`)
 }
