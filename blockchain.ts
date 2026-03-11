@@ -74,7 +74,7 @@ export function register(chainId: Caip2ChainId){
 		return
 
 	const registrationLogger = logger.child({ chainId })
-	const masterUrl = process.env.ROUTER_MASTER_URL || 'ws://master:70/interface'
+	const masterUrl = process.env.ROUTER_MASTER_URL || 'ws://master:70/adapter'
 	const methods = getMethods(chainId)
 	const socket = createSocket(masterUrl)
 	const { sendCommand, sendEvent } = createQueuedCommandResultEventDispatcher(
