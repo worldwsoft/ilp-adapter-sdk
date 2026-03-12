@@ -4,7 +4,7 @@ export type Caip19AssetId = `${Caip2ChainId}/${string}:${string}`
 
 export type BlockchainMethod = 'WalletVerify' | 'WalletCreate' | 'WalletQuery' | 'WalletSubscribe' | 'WalletUnsubscribe'
 export type BlockchainRegisterResult = Record<string, never>
-export type WalletKey = { type: string, value: string }
+export type WalletSecret = { type: string, value: string }
 export type WalletBalances = Record<Caip19AssetId, string>
 
 export interface BlockchainRegisterCommand {
@@ -16,7 +16,7 @@ export interface BlockchainRegisterCommand {
 export interface WalletVerifyCommand {
 	command: 'WalletVerify'
 	address?: Caip10WalletAddress
-	key: WalletKey
+	secret: WalletSecret
 }
 
 export interface WalletVerifyResult {
@@ -30,7 +30,7 @@ export interface WalletCreateCommand {
 
 export interface WalletCreateResult {
 	address: Caip10WalletAddress
-	key: WalletKey
+	secret: WalletSecret
 }
 
 export interface WalletQueryCommand {
