@@ -3,6 +3,13 @@ import { EventEmitter } from 'node:events'
 type PromiseResolver<T> = (value: T | PromiseLike<T>) => void
 type PromiseRejecter = (reason?: unknown) => void
 
+export class AdapterError extends Error {
+	constructor(message: string){
+		super(message)
+		this.name = 'AdapterError'
+	}
+}
+
 export interface SocketCommandPayload {
 	[key: string]: unknown
 	command: string
@@ -122,14 +129,6 @@ export function createQueuedCommandResultEventDispatcher(
 					requestId: commandPayload.requestId
 				})
 			}
-		}else if(isEventPayload(payload)){
-			let eventPayload = payload
-			let handler = handlers[eventPayload.event] as EventHandler | undefined
-
-			if(!handler)
-				throw new Error(`unknown event "${eventPayload.event}"`)
-
-			handler(eventPayload)
 		}else if(isResultPayload(payload)){
 			let resultPayload = payload
 			let handlerIndex = requestRegistry
@@ -142,7 +141,7 @@ export function createQueuedCommandResultEventDispatcher(
 
 			try{
 				if(resultPayload.error)
-					reject(new Error(resultPayload.error))
+					reject(new AdapterError(resultPayload.error))
 				else
 					resolve(resultPayload)
 			}catch(error){
@@ -150,6 +149,14 @@ export function createQueuedCommandResultEventDispatcher(
 			}finally{
 				requestRegistry.splice(handlerIndex, 1)
 			}
+		}else if(isEventPayload(payload)){
+			let eventPayload = payload
+			let handler = handlers[eventPayload.event] as EventHandler | undefined
+
+			if(!handler)
+				throw new Error(`unknown event "${eventPayload.event}"`)
+
+			handler(eventPayload)
 		}else{
 			throw new Error(`unexpected message format: ${JSON.stringify(payload)}`)
 		}
